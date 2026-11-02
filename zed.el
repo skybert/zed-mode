@@ -19,6 +19,8 @@
 
 ;;; Code:
 
+(require 'seq)
+
 (defgroup zed nil
   "Major mode for SpiceDB schema (.zed) files."
   :group 'languages
@@ -36,6 +38,11 @@
 (defcustom zed-eglot-auto-start t
   "When non-nil, run `eglot-ensure' when entering `zed-mode'."
   :type 'boolean)
+
+(defcustom zed-validate-command '("zed" "validate")
+  "Command (program and arguments) used by `zed-validate'.
+The file name is appended as the last argument."
+  :type '(repeat string))
 
 ;;;; Syntax
 
@@ -127,6 +134,49 @@
       (if savep
           (save-excursion (indent-line-to indent))
         (indent-line-to indent)))))
+
+;;;; Validation
+
+(defun zed--validation-target (file)
+  "Return the file `zed validate' should be run on for FILE.
+If a sibling FILE.yaml or FILE.yml exists, it is used, since such a
+file loads the schema through `schemaFile:'.  Otherwise FILE itself."
+  (let ((base (file-name-sans-extension file)))
+    (or (seq-find #'file-exists-p
+                  (list (concat base ".yaml") (concat base ".yml")))
+        file)))
+
+(defun zed-validate ()
+  "Run `zed-validate-command' on the current file.
+If the schema has a sibling .yaml/.yml validation file with the same
+base name, that file is validated instead.  Offers to save the buffer
+first if it has unsaved changes.  Output goes to a compilation buffer."
+  (interactive)
+  (unless buffer-file-name
+    (user-error "Buffer is not visiting a file"))
+  (when (and (buffer-modified-p)
+             (y-or-n-p (format "Save %s first? " (buffer-name))))
+    (save-buffer))
+  (let ((target (zed--validation-target buffer-file-name)))
+    (compile (mapconcat #'shell-quote-argument
+                        (append zed-validate-command
+                                (list (file-local-name target)))
+                        " "))))
+
+(with-eval-after-load 'compile
+  (defvar compilation-error-regexp-alist)
+  (defvar compilation-error-regexp-alist-alist)
+  ;; error: parse error in `schema.zed`, line 3, column 20: ...
+  (add-to-list 'compilation-error-regexp-alist-alist
+               '(zed "in `\\([^`\n]+\\.\\(?:zed\\|ya?ml\\)\\)`, line \\([0-9]+\\), column \\([0-9]+\\)"
+                     1 2 3))
+  (add-to-list 'compilation-error-regexp-alist 'zed))
+
+(defvar zed-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "C-c C-c") #'zed-validate)
+    map)
+  "Keymap for `zed-mode'.")
 
 ;;;; Mode
 
