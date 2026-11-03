@@ -25,7 +25,7 @@
 Minor mode which gives syntax highlighting of zed tuples in any major
 mode, e.g. in [yaml-mode](https://github.com/yoshiki/yaml-mode).
 
-```text
+```elisp
 (require 'zed-tuples)
 (add-hook 'yaml-mode-hook #'zed-tuples-mode)
 ```
