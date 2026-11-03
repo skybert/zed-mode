@@ -32,5 +32,5 @@ mode, e.g. in [yaml-mode](https://github.com/yoshiki/yaml-mode).
 
 ## AI policy
 
-AI may bed when coding. All code comitted must be understood by the
+AI may be when coding. All code comitted must be understood by the
 committer.
