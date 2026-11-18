@@ -72,29 +72,40 @@
 
 (defconst zed-tuples--tuple-re
   (concat "\\_<"
-          ;; 1, 2: resource
+          ;; 1, 2: resource.  Only `type:id' is required, so that a
+          ;; tuple gets highlighted part by part while it's typed.
           "\\(" zed-tuples--type-re "\\):\\(" zed-tuples--id-re "\\)"
+          "\\(?:#"
           ;; 3: relation
-          "#\\(" zed-tuples--relation-re "\\)"
-          ;; 4, 5: subject
-          "@\\(" zed-tuples--type-re "\\):\\(" zed-tuples--id-re "\\)"
-          ;; 6: optional subject relation (may be `...')
-          "\\(?:#\\(" zed-tuples--relation-re "\\|\\.\\.\\.\\)\\)?")
-  "Regexp matching a relationship tuple, without caveat/expiration.")
+          "\\(" zed-tuples--relation-re "\\)?"
+          "\\(?:@"
+          ;; 4: subject type
+          "\\(" zed-tuples--type-re "\\)?"
+          "\\(?::"
+          ;; 5: subject id
+          "\\(" zed-tuples--id-re "\\)?"
+          "\\(?:#"
+          ;; 6: subject relation (may be `...')
+          "\\(" zed-tuples--relation-re "\\|\\.\\.\\.\\)?"
+          "\\)?\\)?\\)?\\)?")
+  "Regexp matching a relationship tuple, without caveat/expiration.
+Everything after the resource `type:id' is optional, so partially
+typed tuples are matched too.")
 
 (defconst zed-tuples--suffix-re
   (concat "\\=\\[\\([a-zA-Z_][a-zA-Z0-9_]*\\)"
-          "\\(?::\\({.*?}\\|[^]\n]*\\)\\)?\\]")
+          "\\(?::\\({.*?}\\|[^]\n]*\\)\\)?\\]?")
   "Regexp matching a `[caveat:{...}]' or `[expiration:...]' block.
-Must start right at point; may be repeated.")
+Must start right at point; may be repeated.  The closing `]' is
+optional so that blocks are highlighted while being typed.")
 
 (defconst zed-tuples-font-lock-keywords
   `((,zed-tuples--tuple-re
      (1 'zed-tuples-type-face t)
      (2 'zed-tuples-id-face t)
-     (3 'zed-tuples-relation-face t)
-     (4 'zed-tuples-type-face t)
-     (5 'zed-tuples-id-face t)
+     (3 'zed-tuples-relation-face t t)
+     (4 'zed-tuples-type-face t t)
+     (5 'zed-tuples-id-face t t)
      (6 'zed-tuples-relation-face t t)
      ;; Caveat and expiration blocks directly following the tuple.
      (,zed-tuples--suffix-re

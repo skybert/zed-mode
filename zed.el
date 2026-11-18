@@ -44,14 +44,31 @@
 The file name is appended as the last argument."
   :type '(repeat string))
 
+;;;; Faces
+
+(defface zed-type-prefix-face
+  '((t :inherit font-lock-constant-face))
+  "Face for the namespace prefix of a type name, e.g. \"entra/\" in
+\"entra/group\"."
+  :group 'zed)
+
+(defface zed-caveat-parameter-face
+  '((t :inherit font-lock-string-face))
+  "Face for caveat parameter names, e.g. \"required_group\" in
+\"caveat has_group(required_group string) {\"."
+  :group 'zed)
+
 ;;;; Syntax
 
 (defconst zed--identifier-re "[a-zA-Z_][a-zA-Z0-9_]*"
   "Regexp matching a plain identifier.")
 
-(defconst zed--type-re
-  (concat zed--identifier-re "\\(?:/" zed--identifier-re "\\)*")
-  "Regexp matching a (possibly namespace-prefixed) type name, e.g. org/user.")
+(defconst zed--prefixed-type-re
+  (concat "\\(\\(?:" zed--identifier-re "/\\)*\\)"
+          "\\(" zed--identifier-re "\\)")
+  "Regexp matching a type name, capturing the prefix and the name.
+Group 1 is the (possibly empty) namespace prefix including the
+trailing slash, e.g. \"entra/\"; group 2 is the bare name, e.g. \"group\".")
 
 (defconst zed--keywords
   '("definition" "caveat" "relation" "permission" "partial"
@@ -82,18 +99,39 @@ The file name is appended as the last argument."
     st)
   "Syntax table for `zed-mode'.")
 
+(defun zed--caveat-params-end ()
+  "Return the end of the caveat parameter list following point.
+Used as the PRE-MATCH-FORM of the caveat parameter font-lock rule;
+the returned position limits the search for parameter names."
+  (save-excursion
+    (skip-chars-forward " \t\n")
+    (if (eq (char-after) ?\()
+        (or (ignore-errors (scan-lists (point) 1 0))
+            (line-end-position))
+      (point))))
+
 (defconst zed-font-lock-keywords
   `(;; definition / caveat / partial names
-    (,(concat "\\_<\\(definition\\|partial\\)\\_>[ \t]+\\(" zed--type-re "\\)")
+    (,(concat "\\_<\\(?:definition\\|partial\\)\\_>[ \t]+" zed--prefixed-type-re)
+     (1 'zed-type-prefix-face)
      (2 font-lock-type-face))
-    (,(concat "\\_<caveat\\_>[ \t]+\\(" zed--type-re "\\)")
-     (1 font-lock-function-name-face))
+    (,(concat "\\_<caveat\\_>[ \t]+" zed--prefixed-type-re)
+     (1 'zed-type-prefix-face)
+     (2 font-lock-function-name-face)
+     ;; caveat parameter names: (name type, name type<...>)
+     (,(concat "\\(?:(\\|,\\)[ \t\n]*\\(" zed--identifier-re "\\)"
+               "[ \t\n]+" zed--identifier-re)
+      (zed--caveat-params-end)
+      nil
+      (1 'zed-caveat-parameter-face)))
     ;; relation / permission names
     (,(concat "\\_<relation\\_>[ \t]+\\(" zed--identifier-re "\\)")
      (1 font-lock-variable-name-face)
      ;; subject types following ':' and '|' on relation lines
-     (,(concat "[:|][ \t]*\\(" zed--type-re "\\)")
-      nil nil (1 font-lock-type-face)))
+     (,(concat "[:|][ \t]*" zed--prefixed-type-re)
+      nil nil
+      (1 'zed-type-prefix-face)
+      (2 font-lock-type-face)))
     (,(concat "\\_<permission\\_>[ \t]+\\(" zed--identifier-re "\\)")
      (1 font-lock-function-name-face))
     ;; keywords
@@ -102,6 +140,11 @@ The file name is appended as the last argument."
     ("\\_<with\\_>[ \t]+\\(?:[^ \t\n]+[ \t]+and[ \t]+\\)?\\(expiration\\)\\_>"
      (1 font-lock-builtin-face))
     ("\\_<\\(?:and\\|use\\)[ \t]+\\(expiration\\)\\_>" (1 font-lock-builtin-face))
+    ;; caveat references: `with entra/has_group'.  Must come after the
+    ;; `expiration' rules so `with expiration' keeps the builtin face.
+    (,(concat "\\_<with\\_>[ \t]+" zed--prefixed-type-re "\\_>")
+     (1 'zed-type-prefix-face)
+     (2 font-lock-function-name-face))
     ;; arrow functions: foo.all(bar) / foo.any(bar)
     ("\\.\\(all\\|any\\)[ \t]*(" (1 font-lock-builtin-face))
     ;; caveat parameter types (not when used as .any())
